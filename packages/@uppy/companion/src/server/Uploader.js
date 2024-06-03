@@ -472,13 +472,14 @@ class Uploader {
    */
   async #emitError(err) {
     // delete stack to avoid sending server info to client
+    // also remove extraData from inside the error object (it is provided outside)
     // see PR discussion https://github.com/transloadit/uppy/pull/3832
     // @ts-ignore
-    const { serializeError } = await import('serialize-error')
-    const { stack, ...serializedErr } = serializeError(err)
+    const { stack, extraData, ...serializedErr } = serializeError(err)
+
     const dataToEmit = {
       action: 'error',
-      payload: { error: serializedErr },
+      payload: { ...extraData, error: serializedErr },
     }
     this.saveState(dataToEmit)
     emitter().emit(this.token, dataToEmit)
