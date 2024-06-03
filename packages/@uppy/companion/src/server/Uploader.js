@@ -480,6 +480,7 @@ class Uploader {
 
     const dataToEmit = {
       action: 'error',
+      // @ts-ignore
       payload: { ...extraData, error: serializedErr },
     }
     this.saveState(dataToEmit)
