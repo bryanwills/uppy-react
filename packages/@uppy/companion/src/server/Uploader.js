@@ -474,6 +474,7 @@ class Uploader {
     // delete stack to avoid sending server info to client
     // also remove extraData from inside the error object (it is provided outside)
     // see PR discussion https://github.com/transloadit/uppy/pull/3832
+    const { serializeError } = await import('serialize-error')
     // @ts-ignore
     const { stack, extraData, ...serializedErr } = serializeError(err)
 
