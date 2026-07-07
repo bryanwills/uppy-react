@@ -1,4 +1,4 @@
-import { fetcher } from '@uppy/utils'
+import { fetcher } from '@uppy/core/utils'
 import * as C from './consts.js'
 import type * as IT from './types.js'
 

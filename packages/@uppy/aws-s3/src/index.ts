@@ -1,4 +1,4 @@
-import type { RequestClient } from '@uppy/companion-client'
+import type { RequestClient } from '@uppy/core/companion-client'
 import {
   BasePlugin,
   type DefinePluginOpts,
@@ -11,13 +11,13 @@ import type {
   Meta,
   RemoteUppyFile,
   UppyFile,
-} from '@uppy/utils'
+} from '@uppy/core/utils'
 import {
   filterFilesToEmitUploadStarted,
   filterFilesToUpload,
   getAllowedMetaFields,
   TaskQueue,
-} from '@uppy/utils'
+} from '@uppy/core/utils'
 import packageJson from '../package.json' with { type: 'json' }
 import S3Uploader, { type UploadResult } from './S3Uploader.js'
 import S3Companion from './s3-client/CompanionS3.js'

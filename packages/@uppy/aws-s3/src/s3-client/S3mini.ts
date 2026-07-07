@@ -280,7 +280,7 @@ class S3mini extends S3Client {
   }
 
   /**
-   * Core XHR upload implementation using @uppy/utils/fetcher.
+   * Core XHR upload implementation using @uppy/core/utils fetcher.
    *
    * Features:
    * - Automatic retry with exponential backoff (3 attempts)
