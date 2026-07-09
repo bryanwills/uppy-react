@@ -1,10 +1,10 @@
-import type { RequestClient } from '@uppy/core/companion-client'
 import {
   BasePlugin,
   type DefinePluginOpts,
   type PluginOpts,
   type Uppy,
 } from '@uppy/core'
+import type { RequestClient } from '@uppy/core/companion-client'
 import type {
   Body,
   LocalUppyFile,
