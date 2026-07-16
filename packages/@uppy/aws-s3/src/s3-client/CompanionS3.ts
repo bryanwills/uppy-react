@@ -46,14 +46,14 @@ class S3Companion extends S3Client {
     return this.xhr({ url, method, data, onProgress, signal, contentType })
   }
 
-  public override async putObject(
-    keyIn: string,
-    data: Blob | File,
-    fileType: string = C.DEFAULT_STREAM_CONTENT_TYPE,
-    metadata: Record<string, unknown>,
-    onProgress?: IT.OnProgressFn,
-    signal?: AbortSignal,
-  ) {
+  public override async putObject({
+    key: keyIn,
+    data,
+    fileType = C.DEFAULT_STREAM_CONTENT_TYPE,
+    metadata = {},
+    onProgress,
+    signal,
+  }: IT.PutObjectParams) {
     const response = await this._fetch(
       `/params?${new URLSearchParams({ filename: keyIn, type: fileType, ...Object.fromEntries(Object.entries(metadata).map(([k, v]) => [`metadata[${k}]`, String(v)])) })}`,
     )
@@ -81,11 +81,11 @@ class S3Companion extends S3Client {
     }
   }
 
-  public override async createMultipartUpload(
-    keyIn: string,
-    fileType: string = C.DEFAULT_STREAM_CONTENT_TYPE,
-    metadata: Record<string, unknown>,
-  ) {
+  public override async createMultipartUpload({
+    key: keyIn,
+    fileType = C.DEFAULT_STREAM_CONTENT_TYPE,
+    metadata,
+  }: IT.CreateMultipartUploadParams) {
     if (typeof fileType !== 'string') {
       throw new TypeError(`${C.ERROR_PREFIX}fileType must be a string`)
     }
@@ -107,14 +107,14 @@ class S3Companion extends S3Client {
     return { uploadId, key }
   }
 
-  public override async uploadPart(
-    key: string,
-    uploadId: string,
-    data: XMLHttpRequestBodyInit,
-    partNumber: number,
-    onProgress?: IT.OnProgressFn,
-    signal?: AbortSignal,
-  ) {
+  public override async uploadPart({
+    key,
+    uploadId,
+    data,
+    partNumber,
+    onProgress,
+    signal,
+  }: IT.UploadPartParams) {
     const response = await this._fetch(
       `/multipart/${encodeURIComponent(uploadId)}/${encodeURIComponent(partNumber)}?${new URLSearchParams({ key })}`,
       {
@@ -142,10 +142,10 @@ class S3Companion extends S3Client {
     return { etag }
   }
 
-  public override async listParts(
-    uploadId: string,
-    key: string,
-  ): Promise<IT.UploadPart[]> {
+  public override async listParts({
+    uploadId,
+    key,
+  }: IT.ListPartsParams): Promise<IT.UploadPart[]> {
     if (!uploadId) {
       throw new TypeError(C.ERROR_UPLOAD_ID_REQUIRED)
     }
@@ -165,11 +165,11 @@ class S3Companion extends S3Client {
     }))
   }
 
-  public override async completeMultipartUpload(
-    key: string,
-    uploadId: string,
-    parts: Array<IT.UploadPart>,
-  ) {
+  public override async completeMultipartUpload({
+    key,
+    uploadId,
+    parts,
+  }: IT.CompleteMultipartUploadParams) {
     const response = await this._fetch(
       `/multipart/${encodeURIComponent(uploadId)}/complete?${new URLSearchParams({ key })}`,
       {
@@ -201,7 +201,10 @@ class S3Companion extends S3Client {
     }
   }
 
-  public override async abortMultipartUpload(key: string, uploadId: string) {
+  public override async abortMultipartUpload({
+    key,
+    uploadId,
+  }: IT.AbortMultipartUploadParams) {
     await this._fetch(
       `/multipart/${encodeURIComponent(uploadId)}?${new URLSearchParams({ key })}`,
       {

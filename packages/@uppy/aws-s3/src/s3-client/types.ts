@@ -110,6 +110,62 @@ export interface UploadPart {
   etag: string
 }
 
+/** Parameters for {@link S3Client.putObject}. */
+export interface PutObjectParams {
+  key: string
+  data: Blob | File
+  fileType?: string
+  metadata?: Record<string, unknown>
+  onProgress?: OnProgressFn
+  signal?: AbortSignal
+}
+
+/** Parameters for {@link S3Client.createMultipartUpload}. */
+export interface CreateMultipartUploadParams {
+  key: string
+  fileType?: string
+  metadata?: Record<string, unknown>
+  signal?: AbortSignal
+}
+
+/** Parameters for {@link S3Client.uploadPart}. */
+export interface UploadPartParams {
+  key: string
+  uploadId: string
+  data: XMLHttpRequestBodyInit
+  partNumber: number
+  onProgress?: OnProgressFn
+  signal?: AbortSignal
+}
+
+/** Parameters for {@link S3Client.listParts}. */
+export interface ListPartsParams {
+  uploadId: string
+  key: string
+  signal?: AbortSignal
+}
+
+/** Parameters for {@link S3Client.completeMultipartUpload}. */
+export interface CompleteMultipartUploadParams {
+  key: string
+  uploadId: string
+  parts: UploadPart[]
+  signal?: AbortSignal
+}
+
+/** Parameters for {@link S3Client.abortMultipartUpload}. */
+export interface AbortMultipartUploadParams {
+  key: string
+  uploadId: string
+  signal?: AbortSignal
+}
+
+/** Parameters for {@link S3Client.deleteObject}. */
+export interface DeleteObjectParams {
+  key: string
+  signal?: AbortSignal
+}
+
 export interface ErrorWithCode {
   code?: string
   cause?: { code?: string }

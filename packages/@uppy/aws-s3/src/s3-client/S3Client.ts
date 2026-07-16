@@ -1,5 +1,4 @@
 import { fetcher } from '@uppy/core/utils'
-import * as C from './consts.js'
 import type * as IT from './types.js'
 
 class S3Client {
@@ -115,14 +114,7 @@ class S3Client {
     })
   }
 
-  public async putObject(
-    key: string,
-    data: XMLHttpRequestBodyInit,
-    fileType: string = C.DEFAULT_STREAM_CONTENT_TYPE,
-    metadata: Record<string, unknown>,
-    onProgress?: IT.OnProgressFn,
-    signal?: AbortSignal,
-  ): Promise<{
+  public async putObject(params: IT.PutObjectParams): Promise<{
     location: string
     key: string
     etag: string | undefined
@@ -131,10 +123,7 @@ class S3Client {
   }
 
   public async createMultipartUpload(
-    key: string,
-    fileType?: string,
-    // @ts-expect-error unused
-    metadata: Record<string, unknown>,
+    params: IT.CreateMultipartUploadParams,
   ): Promise<{
     uploadId: string
     key: string
@@ -142,30 +131,18 @@ class S3Client {
     throw new Error('Not implemented')
   }
 
-  public async uploadPart(
-    key: string,
-    uploadId: string,
-    data: XMLHttpRequestBodyInit,
-    partNumber: number,
-    onProgress?: IT.OnProgressFn,
-    signal?: AbortSignal,
-  ): Promise<{
+  public async uploadPart(params: IT.UploadPartParams): Promise<{
     etag: string
   }> {
     throw new Error('Not implemented')
   }
 
-  public async listParts(
-    uploadId: string,
-    key: string,
-  ): Promise<IT.UploadPart[]> {
+  public async listParts(params: IT.ListPartsParams): Promise<IT.UploadPart[]> {
     throw new Error('Not implemented')
   }
 
   public async completeMultipartUpload(
-    key: string,
-    uploadId: string,
-    parts: IT.UploadPart[],
+    params: IT.CompleteMultipartUploadParams,
   ): Promise<{
     location: string
     bucket: string | undefined
@@ -176,13 +153,12 @@ class S3Client {
   }
 
   public async abortMultipartUpload(
-    key: string,
-    uploadId: string,
+    params: IT.AbortMultipartUploadParams,
   ): Promise<void> {
     throw new Error('Not implemented')
   }
 
-  public async deleteObject(key: string): Promise<void> {
+  public async deleteObject(params: IT.DeleteObjectParams): Promise<void> {
     throw new Error('Not implemented')
   }
 }

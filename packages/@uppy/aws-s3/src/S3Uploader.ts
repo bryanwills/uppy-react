@@ -214,7 +214,7 @@ export default class S3Uploader<M extends Meta, B extends Body> {
         throw new Error('Missing S3 object key for aborting upload')
       }
       this.#options.s3Client
-        .abortMultipartUpload(this.#key, this.#uploadId)
+        .abortMultipartUpload({ key: this.#key, uploadId: this.#uploadId })
         .catch((abortErr) => {
           this.#options.log?.(abortErr, 'warning')
         })
@@ -238,10 +238,11 @@ export default class S3Uploader<M extends Meta, B extends Body> {
     if (!this.#key) {
       throw new Error('Missing S3 object key for resuming upload')
     }
-    const existingParts = await this.#options.s3Client.listParts(
-      this.#uploadId,
-      this.#key,
-    )
+    const existingParts = await this.#options.s3Client.listParts({
+      uploadId: this.#uploadId,
+      key: this.#key,
+      signal: this.#abortController?.signal,
+    })
     // Sync local state with S3 - mark already-uploaded parts
     for (const part of existingParts) {
       const chunkIndex = part.partNumber - 1
@@ -259,17 +260,17 @@ export default class S3Uploader<M extends Meta, B extends Body> {
     const signal = this.#abortController?.signal
     signal?.throwIfAborted()
 
-    const { location, key } = await this.#options.s3Client.putObject(
-      this.#options.key,
-      this.#data,
-      this.#options.file.type || 'application/octet-stream',
-      this.#options.metadata,
-      (bytesUploaded: number) => {
+    const { location, key } = await this.#options.s3Client.putObject({
+      key: this.#options.key,
+      data: this.#data,
+      fileType: this.#options.file.type || 'application/octet-stream',
+      metadata: this.#options.metadata,
+      onProgress: (bytesUploaded: number) => {
         this.#chunkState[0].uploaded = bytesUploaded
         this.#onProgress()
       },
       signal,
-    )
+    })
 
     this.#onSuccess({
       location,
@@ -281,12 +282,15 @@ export default class S3Uploader<M extends Meta, B extends Body> {
     const signal = this.#abortController?.signal
     signal?.throwIfAborted()
 
+    // We deliberately don't pass the abort signal into the create request: if
+    // it were cancelled mid-flight, S3 might still create the upload while we
+    // never receive the uploadId — an orphan we couldn't clean up (see below).
     const { uploadId, key } =
-      await this.#options.s3Client.createMultipartUpload(
-        this.#options.key,
-        this.#options.file.type || 'application/octet-stream',
-        this.#options.metadata,
-      )
+      await this.#options.s3Client.createMultipartUpload({
+        key: this.#options.key,
+        fileType: this.#options.file.type || 'application/octet-stream',
+        metadata: this.#options.metadata,
+      })
     if (key == null) {
       throw new Error(
         'S3 client did not return object key for multipart upload',
@@ -330,17 +334,17 @@ export default class S3Uploader<M extends Meta, B extends Body> {
       if (this.#key == null) {
         throw new Error('Missing S3 object key for uploading part')
       }
-      const { etag } = await this.#options.s3Client.uploadPart(
-        this.#key,
-        this.#uploadId!,
-        chunkData,
+      const { etag } = await this.#options.s3Client.uploadPart({
+        key: this.#key,
+        uploadId: this.#uploadId!,
+        data: chunkData,
         partNumber,
-        (bytesUploaded: number) => {
+        onProgress: (bytesUploaded: number) => {
           this.#chunkState[chunkIndex].uploaded = bytesUploaded
           this.#onProgress()
         },
         signal,
-      )
+      })
 
       // after part finished uploading, update chunk state
       this.#chunkState[i].uploaded = chunk.size
@@ -366,11 +370,12 @@ export default class S3Uploader<M extends Meta, B extends Body> {
     }
 
     const { location, key } =
-      await this.#options.s3Client.completeMultipartUpload(
-        this.#key,
-        this.#uploadId!,
+      await this.#options.s3Client.completeMultipartUpload({
+        key: this.#key,
+        uploadId: this.#uploadId!,
         parts,
-      )
+        signal,
+      })
 
     this.#onSuccess({
       location,

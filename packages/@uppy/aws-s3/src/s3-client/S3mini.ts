@@ -34,7 +34,7 @@ import * as U from './utils.js'
  *   },
  * });
  *
- * await s3.putObject('file.txt', 'Hello, World!');
+ * await s3.putObject({ key: 'file.txt', data: 'Hello, World!' });
  */
 class S3mini extends S3Client {
   readonly endpoint?: URL
@@ -175,20 +175,14 @@ class S3mini extends S3Client {
 
   /**
    * Uploads an object to S3 using XHR for progress tracking.
-   * @param key - Object key
-   * @param data - Data to upload (Blob, ArrayBuffer, Uint8Array, or string)
-   * @param fileType - Content type
-   * @param onProgress - Optional progress callback
-   * @param signal - Optional abort signal
    */
-  public override async putObject(
-    key: string,
-    data: XMLHttpRequestBodyInit,
-    fileType: string = C.DEFAULT_STREAM_CONTENT_TYPE,
-    metadata?: Record<string, unknown>,
-    onProgress?: IT.OnProgressFn,
-    signal?: AbortSignal,
-  ) {
+  public override async putObject({
+    key,
+    data,
+    fileType = C.DEFAULT_STREAM_CONTENT_TYPE,
+    onProgress,
+    signal,
+  }: IT.PutObjectParams) {
     this._checkKey(key)
 
     const { xhr, url } = await this.request({
@@ -207,11 +201,12 @@ class S3mini extends S3Client {
   }
 
   /** Initiates a multipart upload and returns the upload ID. */
-  public override async createMultipartUpload(
-    key: string,
-    fileType: string = C.DEFAULT_STREAM_CONTENT_TYPE,
-    metadata?: Record<string, unknown>, // todo support metadata here too?
-  ) {
+  public override async createMultipartUpload({
+    key,
+    fileType = C.DEFAULT_STREAM_CONTENT_TYPE,
+    signal,
+  }: IT.CreateMultipartUploadParams) {
+    // todo support metadata here too?
     this._checkKey(key)
     if (typeof fileType !== 'string') {
       throw new TypeError(`${C.ERROR_PREFIX}fileType must be a string`)
@@ -220,6 +215,7 @@ class S3mini extends S3Client {
     const { xhr } = await this.request({
       request: { method: 'POST', key },
       contentType: fileType,
+      signal,
     })
 
     const parsed = U.parseXml(xhr.responseText) as Record<string, unknown>
@@ -247,14 +243,14 @@ class S3mini extends S3Client {
     )
   }
 
-  public override async uploadPart(
-    key: string,
-    uploadId: string,
-    data: XMLHttpRequestBodyInit,
-    partNumber: number,
-    onProgress?: IT.OnProgressFn,
-    signal?: AbortSignal,
-  ) {
+  public override async uploadPart({
+    key,
+    uploadId,
+    data,
+    partNumber,
+    onProgress,
+    signal,
+  }: IT.UploadPartParams) {
     this._validateUploadPartParams(key, uploadId, partNumber)
 
     const { xhr } = await this.request({
@@ -379,16 +375,18 @@ class S3mini extends S3Client {
   }
 
   /** Lists uploaded parts for a multipart upload. */
-  public override async listParts(
-    uploadId: string,
-    key: string,
-  ): Promise<IT.UploadPart[]> {
+  public override async listParts({
+    uploadId,
+    key,
+    signal,
+  }: IT.ListPartsParams): Promise<IT.UploadPart[]> {
     this._checkKey(key)
     if (!uploadId) {
       throw new TypeError(C.ERROR_UPLOAD_ID_REQUIRED)
     }
     const { xhr } = await this.request({
       request: { method: 'GET', key, uploadId },
+      signal,
     })
 
     const parsed = U.parseXml(xhr.responseText) as Record<string, unknown>
@@ -417,17 +415,19 @@ class S3mini extends S3Client {
   }
 
   /** Completes a multipart upload by combining all uploaded parts. */
-  public override async completeMultipartUpload(
-    key: string,
-    uploadId: string,
-    parts: Array<IT.UploadPart>,
-  ) {
+  public override async completeMultipartUpload({
+    key,
+    uploadId,
+    parts,
+    signal,
+  }: IT.CompleteMultipartUploadParams) {
     const xmlBody = this._buildCompleteMultipartUploadXml(parts)
 
     const { xhr } = await this.request({
       request: { method: 'POST', key, uploadId },
       contentType: C.XML_CONTENT_TYPE,
       data: xmlBody,
+      signal,
     })
 
     const parsed = U.parseXml(xhr.responseText)
@@ -473,7 +473,11 @@ class S3mini extends S3Client {
   }
 
   /** Aborts a multipart upload and removes all uploaded parts. */
-  public override async abortMultipartUpload(key: string, uploadId: string) {
+  public override async abortMultipartUpload({
+    key,
+    uploadId,
+    signal,
+  }: IT.AbortMultipartUploadParams) {
     this._checkKey(key)
     if (!uploadId) {
       throw new TypeError(C.ERROR_UPLOAD_ID_REQUIRED)
@@ -481,6 +485,7 @@ class S3mini extends S3Client {
 
     const { xhr } = await this.request({
       request: { method: 'DELETE', key, uploadId },
+      signal,
     })
 
     const parsed = U.parseXml(xhr.responseText) as Record<string, unknown>
@@ -511,9 +516,10 @@ class S3mini extends S3Client {
   }
 
   /** Deletes an object from the bucket. Returns true on success. */
-  public override async deleteObject(key: string) {
+  public override async deleteObject({ key, signal }: IT.DeleteObjectParams) {
     const { xhr } = await this.request({
       request: { method: 'DELETE', key },
+      signal,
     })
 
     if (xhr.status !== 200 && xhr.status !== 204) {
