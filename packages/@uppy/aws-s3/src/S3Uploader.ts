@@ -185,12 +185,24 @@ export default class S3Uploader<M extends Meta, B extends Body> {
     this.#abortController?.abort()
     // Always create a fresh AbortController (also for resume)
     this.#abortController = new AbortController()
+    const signal = this.#abortController.signal
+
+    signal.addEventListener('abort', () => {
+      // Clean up event listeners
+      this.#eventManager.remove()
+    })
 
     try {
-      if (this.#uploadHasStarted) {
-        await this.#resumeUpload()
+      const uploadId = this.#uploadId
+      if (this.#uploadHasStarted && uploadId) {
+        await this.#resumeUpload(uploadId, signal)
       } else {
-        await this.#createUpload()
+        this.#uploadHasStarted = true
+        if (this.#shouldUseMultipart) {
+          await this.#uploadMultipart(signal)
+        } else {
+          await this.#uploadNonMultipart(signal)
+        }
       }
     } catch (err) {
       this.#onError(err as Error)
@@ -207,8 +219,7 @@ export default class S3Uploader<M extends Meta, B extends Body> {
    */
   abort(opts?: { abortInS3?: boolean }): void {
     this.#abortController?.abort()
-    // Clean up event listeners
-    this.#eventManager.remove()
+
     if (opts?.abortInS3 !== false && this.#uploadId) {
       if (!this.#key) {
         throw new Error('Missing S3 object key for aborting upload')
@@ -221,27 +232,14 @@ export default class S3Uploader<M extends Meta, B extends Body> {
     }
   }
 
-  async #createUpload(): Promise<void> {
-    this.#uploadHasStarted = true
-    if (this.#shouldUseMultipart) {
-      await this.#uploadMultipart()
-    } else {
-      await this.#uploadNonMultipart()
-    }
-  }
-
-  async #resumeUpload(): Promise<void> {
-    if (!this.#uploadId) {
-      await this.#createUpload()
-      return
-    }
+  async #resumeUpload(uploadId: string, signal: AbortSignal): Promise<void> {
     if (!this.#key) {
       throw new Error('Missing S3 object key for resuming upload')
     }
     const existingParts = await this.#options.s3Client.listParts({
-      uploadId: this.#uploadId,
+      uploadId,
       key: this.#key,
-      signal: this.#abortController?.signal,
+      signal,
     })
     // Sync local state with S3 - mark already-uploaded parts
     for (const part of existingParts) {
@@ -253,13 +251,10 @@ export default class S3Uploader<M extends Meta, B extends Body> {
     }
     // Emit progress update to reflect already-uploaded parts
     this.#onProgress()
-    await this.#uploadRemainingParts()
+    await this.#uploadRemainingParts(signal)
   }
 
-  async #uploadNonMultipart(): Promise<void> {
-    const signal = this.#abortController?.signal
-    signal?.throwIfAborted()
-
+  async #uploadNonMultipart(signal: AbortSignal): Promise<void> {
     const { location, key } = await this.#options.s3Client.putObject({
       key: this.#options.key,
       data: this.#data,
@@ -278,52 +273,29 @@ export default class S3Uploader<M extends Meta, B extends Body> {
     })
   }
 
-  async #uploadMultipart(): Promise<void> {
-    const signal = this.#abortController?.signal
-    signal?.throwIfAborted()
-
-    // We deliberately don't pass the abort signal into the create request: if
-    // it were cancelled mid-flight, S3 might still create the upload while we
-    // never receive the uploadId — an orphan we couldn't clean up (see below).
+  async #uploadMultipart(signal: AbortSignal): Promise<void> {
     const { uploadId, key } =
       await this.#options.s3Client.createMultipartUpload({
         key: this.#options.key,
         fileType: this.#options.file.type || 'application/octet-stream',
         metadata: this.#options.metadata,
+        signal,
       })
-    if (key == null) {
-      throw new Error(
-        'S3 client did not return object key for multipart upload',
-      )
-    }
 
     this.#key = key
     this.#uploadId = uploadId
-
-    // The file may have been removed/cancelled while createMultipartUpload was
-    // in flight. We deliberately don't pass the abort signal into the create
-    // request: if it were cancelled mid-flight, S3 might still create the upload
-    // while we never receive the uploadId — an orphan we couldn't clean up.
-    // Instead we let create finish, then abort the upload in S3 so it isn't left
-    // behind, and skip persisting resume state for a cancelled upload.
-    if (this.#abortController?.signal.aborted) {
-      this.abort()
-      return
-    }
 
     // Persist resume state so Golden Retriever can restore it after page refresh
     this.#options.uppy.setFileState(this.#options.file.id, {
       s3Multipart: { uploadId, key },
     })
 
-    await this.#uploadRemainingParts()
+    await this.#uploadRemainingParts(signal)
   }
 
-  async #uploadRemainingParts(): Promise<void> {
-    const signal = this.#abortController?.signal
-
+  async #uploadRemainingParts(signal: AbortSignal): Promise<void> {
     for (let i = 0; i < this.#chunks.length; i++) {
-      signal?.throwIfAborted()
+      signal.throwIfAborted()
       if (this.#chunkState[i].etag) continue // already uploaded
 
       const chunk = this.#chunks[i]
@@ -358,8 +330,6 @@ export default class S3Uploader<M extends Meta, B extends Body> {
         })
       }
     }
-
-    signal?.throwIfAborted()
 
     const parts = this.#chunkState.flatMap((state, i) =>
       state.etag ? [{ partNumber: i + 1, etag: state.etag }] : [],
