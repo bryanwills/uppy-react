@@ -150,14 +150,14 @@ export default class S3Uploader<M extends Meta, B extends Body> {
 
     this.#eventManager.onFilePause(fileId, (isPaused) => {
       if (isPaused) {
-        this.pause()
+        this.#pause()
       } else {
         this.start()
       }
     })
 
     this.#eventManager.onPauseAll(fileId, () => {
-      this.pause()
+      this.#pause()
     })
 
     this.#eventManager.onResumeAll(fileId, () => {
@@ -187,15 +187,10 @@ export default class S3Uploader<M extends Meta, B extends Body> {
     this.#abortController = new AbortController()
     const signal = this.#abortController.signal
 
-    signal.addEventListener('abort', () => {
-      // Clean up event listeners
-      this.#eventManager.remove()
-    })
-
     try {
       const uploadId = this.#uploadId
       if (this.#uploadHasStarted && uploadId) {
-        await this.#resumeUpload(uploadId, signal)
+        await this.#resumeMultipartUpload(uploadId, signal)
       } else {
         this.#uploadHasStarted = true
         if (this.#shouldUseMultipart) {
@@ -205,11 +200,11 @@ export default class S3Uploader<M extends Meta, B extends Body> {
         }
       }
     } catch (err) {
-      this.#onError(err as Error)
+      this.#onError(err instanceof Error ? err : new Error(err))
     }
   }
 
-  pause(): void {
+  #pause(): void {
     this.#abortController?.abort()
   }
 
@@ -219,6 +214,9 @@ export default class S3Uploader<M extends Meta, B extends Body> {
    */
   abort(opts?: { abortInS3?: boolean }): void {
     this.#abortController?.abort()
+
+    // Clean up event listeners
+    this.#eventManager.remove()
 
     if (opts?.abortInS3 !== false && this.#uploadId) {
       if (!this.#key) {
@@ -230,9 +228,16 @@ export default class S3Uploader<M extends Meta, B extends Body> {
           this.#options.log?.(abortErr, 'warning')
         })
     }
+
+    this.#key = undefined
+    this.#uploadId = undefined
+    this.#uploadHasStarted = false
   }
 
-  async #resumeUpload(uploadId: string, signal: AbortSignal): Promise<void> {
+  async #resumeMultipartUpload(
+    uploadId: string,
+    signal: AbortSignal,
+  ): Promise<void> {
     if (!this.#key) {
       throw new Error('Missing S3 object key for resuming upload')
     }
@@ -282,7 +287,7 @@ export default class S3Uploader<M extends Meta, B extends Body> {
         signal,
       })
 
-    this.#key = key
+    this.#key = key // Note: may differ from this.#options.key
     this.#uploadId = uploadId
 
     // Persist resume state so Golden Retriever can restore it after page refresh
@@ -368,9 +373,7 @@ export default class S3Uploader<M extends Meta, B extends Body> {
     // may still complete successfully. Don't emit success in this case since
     // the file no longer exists in Uppy's state.
     this.#eventManager.remove()
-    if (this.#abortController?.signal.aborted) {
-      return
-    }
+
     // Clear persisted resume state — upload completed successfully.
     this.#options.uppy.setFileState(this.#options.file.id, {
       s3Multipart: undefined,
@@ -381,9 +384,6 @@ export default class S3Uploader<M extends Meta, B extends Body> {
   #onError(err: Error): void {
     // ignore abort signals from intentional cancellation
     if (err.name === 'AbortError') return
-    // If we intentionally aborted, don't report any subsequent errors
-    // (e.g., S3 returning 404 NoSuchUpload after we aborted the upload)
-    if (this.#abortController?.signal.aborted) return
 
     // Clean up event listeners so this uploader doesn't become a "zombie"
     // that reacts to future retry/pause/resume events after the error.
