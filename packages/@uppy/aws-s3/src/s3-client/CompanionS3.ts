@@ -90,6 +90,7 @@ class S3Companion extends S3Client {
     key: keyIn,
     fileType = C.DEFAULT_STREAM_CONTENT_TYPE,
     metadata,
+    signal,
   }: IT.CreateMultipartUploadParams) {
     if (typeof fileType !== 'string') {
       throw new TypeError(`${C.ERROR_PREFIX}fileType must be a string`)
@@ -100,12 +101,14 @@ class S3Companion extends S3Client {
       method,
       body: JSON.stringify({ filename: keyIn, metadata, type: fileType }),
       headers: { 'content-type': 'application/json' },
+      signal,
     })
     const {
       key,
       uploadId,
     }: { key?: string; uploadId?: string; bucket?: string } =
       await response.json()
+
     if (uploadId == null) throw new Error('No uploadId returned')
     if (key == null) throw new Error('No key returned')
 
@@ -124,6 +127,7 @@ class S3Companion extends S3Client {
       `/multipart/${encodeURIComponent(uploadId)}/${encodeURIComponent(partNumber)}?${new URLSearchParams({ key })}`,
       {
         method: 'GET',
+        signal,
       },
     )
 
@@ -150,6 +154,7 @@ class S3Companion extends S3Client {
   public override async listParts({
     uploadId,
     key,
+    signal,
   }: IT.ListPartsParams): Promise<IT.UploadPart[]> {
     if (!uploadId) {
       throw new TypeError(C.ERROR_UPLOAD_ID_REQUIRED)
@@ -159,6 +164,7 @@ class S3Companion extends S3Client {
       `/multipart/${encodeURIComponent(uploadId)}?${new URLSearchParams({ key })}`,
       {
         method: 'GET',
+        signal,
       },
     )
 
@@ -174,6 +180,7 @@ class S3Companion extends S3Client {
     key,
     uploadId,
     parts,
+    signal,
   }: IT.CompleteMultipartUploadParams) {
     const response = await this._fetch(
       `/multipart/${encodeURIComponent(uploadId)}/complete?${new URLSearchParams({ key })}`,
@@ -186,6 +193,7 @@ class S3Companion extends S3Client {
           })),
         }),
         headers: { 'content-type': 'application/json' },
+        signal,
       },
     )
 
@@ -209,11 +217,13 @@ class S3Companion extends S3Client {
   public override async abortMultipartUpload({
     key,
     uploadId,
+    signal,
   }: IT.AbortMultipartUploadParams) {
     await this._fetch(
       `/multipart/${encodeURIComponent(uploadId)}?${new URLSearchParams({ key })}`,
       {
         method: 'DELETE',
+        signal,
       },
     )
   }
