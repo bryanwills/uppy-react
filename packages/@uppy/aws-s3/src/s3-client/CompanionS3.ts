@@ -54,9 +54,14 @@ class S3Companion extends S3Client {
     onProgress,
     signal,
   }: IT.PutObjectParams) {
-    const response = await this._fetch(
-      `/params?${new URLSearchParams({ filename: keyIn, type: fileType, ...Object.fromEntries(Object.entries(metadata).map(([k, v]) => [`metadata[${k}]`, String(v)])) })}`,
-    )
+    const searchParams = new URLSearchParams({
+      filename: keyIn,
+      type: fileType,
+      ...Object.fromEntries(
+        Object.entries(metadata).map(([k, v]) => [`metadata[${k}]`, String(v)]),
+      ),
+    })
+    const response = await this._fetch(`/params?${searchParams}`)
     const { url, fields }: { url: string; fields: Record<string, string> } =
       await response.json()
 
