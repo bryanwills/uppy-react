@@ -205,7 +205,7 @@ export default class Tus<M extends Meta, B extends Body> extends BasePlugin<
    *
    * When working on this function, keep in mind:
    *  - When an upload is completed or cancelled for any reason, the tus.Upload and EventManager instances need to be cleaned
-   *    up using this.resetUploaderReferences().
+   *    up using this.#resetUploaderReferences() and this.#abortUploader().
    *  - When an upload is cancelled or paused, for any reason, it needs to be removed from the `this.requests` queue using
    *    `queuedRequest.abort()`.
    *  - When an upload is completed for any reason, including errors, it needs to be marked as such using
@@ -491,7 +491,7 @@ export default class Tus<M extends Meta, B extends Body> extends BasePlugin<
           upload.start()
         }
         // Don't do anything here, the caller will take care of cancelling the upload itself
-        // using resetUploaderReferences(). This is because resetUploaderReferences() has to be
+        // using #resetUploaderReferences(). This is because #resetUploaderReferences() has to be
         // called when this request is still in the queue, and has not been started yet, too. At
         // that point this cancellation function is not going to be called.
         // Also, we need to remove the request from the queue _without_ destroying everything
