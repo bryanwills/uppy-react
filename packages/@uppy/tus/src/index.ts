@@ -161,33 +161,20 @@ export default class Tus<M extends Meta, B extends Body> extends BasePlugin<
   }
 
   /**
+   * @param fileID
+   * @param terminate Terminate the upload on the server (sends a `DELETE` request).
+   */
+  #abortUploader(fileID: string, terminate?: boolean) {
+    const uploader = this.uploaders[fileID]
+    uploader?.abort(terminate)
+  }
+
+  /**
    * Clean up all references for a file's upload: the tus.Upload instance,
    * any events related to the file, and the Companion WebSocket connection.
    */
-  resetUploaderReferences(
-    fileID: string,
-    opts?: {
-      /** Terminate the upload on the server (sends a `DELETE` request). */
-      abort?: boolean
-      /**
-       * Abort the underlying request. Defaults to `true`. Set to `false` when
-       * the request has already completed (e.g. in the error handler), so the
-       * underlying `xhr` — and thus the server response — is preserved instead
-       * of being reset by `abort()`.
-       */
-      abortRequest?: boolean
-    },
-  ): void {
-    const uploader = this.uploaders[fileID]
-    if (uploader) {
-      if (opts?.abortRequest !== false) {
-        uploader.abort()
-
-        if (opts?.abort) {
-          uploader.abort(true)
-        }
-      }
-
+  #resetUploaderReferences(fileID: string): void {
+    if (this.uploaders[fileID]) {
       this.uploaders[fileID] = null
     }
     if (this.uploaderEvents[fileID]) {
@@ -232,7 +219,8 @@ export default class Tus<M extends Meta, B extends Body> extends BasePlugin<
   async #uploadLocalFile(
     file: LocalUppyFile<M, B>,
   ): Promise<tus.Upload | string> {
-    this.resetUploaderReferences(file.id)
+    this.#abortUploader(file.id)
+    this.#resetUploaderReferences(file.id)
 
     // Captured in `onError` and forwarded to the `upload-error` event in the
     // `.catch` below, so consumers can read the failing server response.
@@ -341,7 +329,7 @@ export default class Tus<M extends Meta, B extends Body> extends BasePlugin<
         // it would reset the underlying `xhr` (status `0`, empty body) and
         // discard the response we just captured. We still drop our references
         // and remove the event listeners.
-        this.resetUploaderReferences(file.id, { abortRequest: false })
+        this.#resetUploaderReferences(file.id)
         queuedRequest?.abort()
 
         if (typeof opts.onError === 'function') {
@@ -380,7 +368,8 @@ export default class Tus<M extends Meta, B extends Body> extends BasePlugin<
 
         this.uppy.emit('upload-success', this.uppy.getFile(file.id), uploadResp)
 
-        this.resetUploaderReferences(file.id)
+        this.#abortUploader(file.id)
+        this.#resetUploaderReferences(file.id)
         queuedRequest.done()
 
         if (upload.url) {
@@ -523,7 +512,8 @@ export default class Tus<M extends Meta, B extends Body> extends BasePlugin<
 
       eventManager.onFileRemove(file.id, (targetFileID) => {
         queuedRequest.abort()
-        this.resetUploaderReferences(file.id, { abort: !!upload.url })
+        this.#abortUploader(file.id, !!upload.url)
+        this.#resetUploaderReferences(file.id)
         resolve(`upload ${targetFileID} was removed`)
       })
 
@@ -546,7 +536,8 @@ export default class Tus<M extends Meta, B extends Body> extends BasePlugin<
 
       eventManager.onCancelAll(file.id, () => {
         queuedRequest.abort()
-        this.resetUploaderReferences(file.id, { abort: !!upload.url })
+        this.#abortUploader(file.id, !!upload.url)
+        this.#resetUploaderReferences(file.id)
         resolve(`upload ${file.id} was canceled`)
       })
 
