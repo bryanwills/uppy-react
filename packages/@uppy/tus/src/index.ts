@@ -161,8 +161,12 @@ export default class Tus<M extends Meta, B extends Body> extends BasePlugin<
   }
 
   /**
+   * `uploader.abort()` is provided by tus-js-client. With no argument (or
+   * `false`), it aborts only the local upload request. Passing `true` also
+   * terminates the Tus upload on the server by sending a `DELETE` request.
+   *
    * @param fileID
-   * @param terminate Terminate the upload on the server (sends a `DELETE` request).
+   * @param terminate Whether to terminate the upload on the server.
    */
   #abortUploader(fileID: string, terminate?: boolean) {
     const uploader = this.uploaders[fileID]
